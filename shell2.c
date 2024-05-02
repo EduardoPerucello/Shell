@@ -133,13 +133,13 @@ void redirecionar_saida(char** parsed, char *nome_arquivo, int write_end)
 
     if(write_end ==1)
     {
-        saida = open(nome_arquivo, O_APPEND | O_WRONLY, S_IRUSR | S_SWUSR);
+        saida = open(nome_arquivo, O_APPEND | O_WRONLY, S_IRUSR | S_IWUSR);
         if (-1 == saida){
             perror(nome_arquivo);
             return;
         }
     }else{
-        saida = open(nome_arquivo, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_SWUSR);
+        saida = open(nome_arquivo, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
          if (-1 == saida){
             perror(nome_arquivo);
             return;
@@ -179,7 +179,7 @@ void executaArgsUnitarios(char* comandosDeEntrada, char** parsed, char** arquivo
 {
     pid_t pid = fork();
 
-    if (pit == -1)
+    if (pid == -1)
     {
         printf("\nO processo de forking falhou..");
         return;
