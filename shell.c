@@ -273,7 +273,7 @@ void executaArgsEmPipe(char** parsed, char** parsedpipe, char** arquivo_esquerda
 {
     int ret;
     int pipefd[2];
-    pid_t processo_esquerda, porcesso_direita;
+    pid_t processo_esquerda, processo_direita;
 
     if (pipe(pipefd) < 0){
         printf("A inicialização do pipe falhou");
@@ -282,8 +282,8 @@ void executaArgsEmPipe(char** parsed, char** parsedpipe, char** arquivo_esquerda
 
     processo_esquerda = fork();
 
-    if (porcesso_esquerda < 0){
-        printf("\nO processo de forking falhou..")
+    if (processo_esquerda < 0){
+        printf("\nO processo de forking falhou..");
         return;
     }
 
@@ -303,7 +303,7 @@ void executaArgsEmPipe(char** parsed, char** parsedpipe, char** arquivo_esquerda
         //PAI EM EXECUÇÃO
         processo_direita = fork();
         if (processo_direita < 0){
-            printf("\nO processo de forking falhou..")
+            printf("\nO processo de forking falhou..");
             return;
         }
 
@@ -329,10 +329,10 @@ void executaArgsEmPipe(char** parsed, char** parsedpipe, char** arquivo_esquerda
 
 int main()
 {
-    char *comandosDeEntrada, *argumentos{MAXLIST};
+    char *comandosDeEntrada, *argumentos[MAXLIST];
     char* argumentosPipe[MAXLIST];
     char* nomeArquivo[2];
-    char* comandosDeEntradacopy;
+    char *comandosDeEntradacopy;
     int pipeOuUnitario = 0;
     int direcionadorDuplo;
     char* arquivo_pipe[2];
@@ -358,17 +358,15 @@ int main()
         if (pipeOuUnitario == 3) executaArgsUnitarios(comandosDeEntradacopy, argumentos, nomeArquivo, 1);
 
         if (pipeOuUnitario == 4) executaArgsEmPipe(argumentos, argumentosPipe, nomeArquivo, arquivo_pipe, 1);
-
-        //LIBERA A MEMÓRIA ALOCADA
-        free(comandosDeEntradaCopy);
-        free(comandosDeEntrada);
     }
 
+    //LIBERA A MEMÓRIA ALOCADA
+    free(comandosDeEntradacopy);
+    free(comandosDeEntrada);
+    
     //LIBERA A MEMÓRIA ALOCADA PARA OS ARRAYS APÓS O LOOP
     free(argumentos);
     free(argumentosPipe);
     free(nomeArquivo);
     free(arquivo_pipe);
-
-    return 0;
 }
