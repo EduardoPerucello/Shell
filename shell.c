@@ -5,12 +5,24 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <fcntl.h>
+#include <pwd.h> // para usar getpwuid
+
 
 #define MAXCOM 1000 
 #define MAXLIST 100
 #define clear() printf("\033[H\033[J")
 #define BUFSIZE 1024
 
+//ATUALIZA O DIRETORIO ATUAL
+char current_dir[BUFSIZE];
+
+//INICIALIZAÇÃO DO DIRETORI ATUAL
+void init_current_dir() {
+    if (getcwd(current_dir, sizeof(current_dir)) == NULL) {
+        perror("getcwd");
+        exit(EXIT_FAILURE);
+    }
+}
 
 //LEITURA DA LINHA ATÉ O ENTER
 char *read_line(void)
@@ -22,7 +34,7 @@ char *read_line(void)
 
     if (!buffer)
     {
-        fprintf(stderr, "lsh: allocation error\n");
+        fprintf(stderr, "Allocation error\n");
         exit(EXIT_FAILURE);
     }
 
@@ -35,26 +47,26 @@ char *read_line(void)
         {
             buffer[position] = '\0';
             return buffer;
-        }else{
+        }
+        else
+        {
             buffer[position] = c;
         }
 
         position++;
 
-        //SE O TAMANHO EXCEDE O BUFFER ELE REALOCA MAIS ESPAÇO
+        //REALOCA O BUFFER SE NECESSÁRIO
         if (position >= bufsize)
         {
             bufsize += BUFSIZE;
             buffer = realloc(buffer, bufsize);
             if (!buffer)
             {
-                fprintf(stderr, "lsh: allocation error\n");
+                fprintf(stderr, "Allocation error\n");
                 exit(EXIT_FAILURE);
             }
         }
-
     }
-    
 }
 
 //RETORNAR OS COMANDOS SEPARADOS POR ESPAÇO
@@ -73,32 +85,45 @@ void retirarEspaco(char* str, char** comandos)
 //COMANDO EXIT E CD
 int builtinComandos(char** parsed)
 {
-    int size = 2, argumentosIndentificador = 0;
-    char* comandosDeEspecificos[size];
-
-    comandosDeEspecificos[0] = "exit";
-    comandosDeEspecificos[1] = "cd";
-
-    for (int i = 0; i < size; i++)
+    //Verifica se o comando é 'cd'
+    if (strcmp(parsed[0], "cd") == 0)
     {
-        //CASO O COMANDO CORRESPONDA A ALGUM DOS ESPECIFICOS, GUARDAMOS A POSIÇÃO PARA O SWITCH/CASE
-        if (strcmp(parsed[0], comandosDeEspecificos[i]) == 0){
-            argumentosIndentificador = i + 1;
-            break;
+        //Verifica se nenhum diretório é fornecido ou se o diretório é '~' (home)
+        if (parsed[1] == NULL || strcmp(parsed[1], "~") == 0) {
+            //Obtém as informações do usuário atual
+            struct passwd *pw = getpwuid(getuid());
+            if (pw == NULL) {
+                perror("getpwuid");
+                return 1; //Retorna 1 em caso de erro
+            }
+            //Muda para o diretório home do usuário
+            if (chdir(pw->pw_dir) != 0) {
+                perror("chdir");
+                return 1; //Retorna 1 em caso de erro
+            }
+        } else if (strcmp(parsed[1], "..") == 0) {
+            //Se o diretório fornecido for '..', move para o diretório pai
+            if (chdir("..") != 0) {
+                perror("chdir");
+                return 1; //Retorna 1 em caso de erro
+            }
+        } else {
+            //Se um diretório específico for fornecido, move para esse diretório
+            if (chdir(parsed[1]) != 0) {
+                perror("chdir");
+                return 1; //Retorna 1 em caso de erro
+            }
         }
+        init_current_dir(); //Atualiza o diretório atual após o comando cd
+        return 1; //Retorna 1 para indicar que um comando interno foi executado
     }
-
-    switch (argumentosIndentificador){
-    case 1:
-        printf("\nGoodbye\n");
-        exit(0);
-    case 2:
-        chdir(parsed[1]);
-        return 1;
-    default:
-        break;
+    //Verifica se o comando é 'exit'
+    else if (strcmp(parsed[0], "exit") == 0)
+    {
+        printf("\nGoodbye\n"); //Imprime uma mensagem de despedida
+        exit(EXIT_SUCCESS); //Termina o programa com sucesso
     }
-    return 0;
+    return 0; //Retorna 0 se o comando não for interno
 }
 
 //VERIFICA SE EXISTE DIRECIONADOR PARA ARQUIVO
@@ -121,7 +146,7 @@ int existePipe(char* str, char** comandosPipe)
     for (int i = 0; i < 2; i++)
     {
         //GUARDA COMANDOS A ESQUERDA DO PIPE EM comandosPipe[0] E DIREITA EM comandosPipe[1]
-        comandosPipe[i] = strsep(&str, "|");
+        comandosPipe[i] = strsep(&str, "&");
         if (comandosPipe[i] == NULL)
             break;
     }
@@ -185,10 +210,7 @@ int processarString(char* comandosDeEntrada, char** argumentos, char** argumento
 //MOSTRA O DIRETORIO RAIZ
 void printDir()
 {
-    char cwd[1024];
-    getcwd(cwd, sizeof(cwd));
-    printf("\n%s > ", cwd);
-
+    printf("\n%s > ", current_dir);
 }
 
 //REDICIONAR A SAIDA
@@ -242,7 +264,7 @@ void redirecionar_saida(char** parsed, char *nome_arquivo, int write_end)
     }
 }
 
-//FUNÇÃO PARA EXECUTAR COMANDOS UNITARIOS
+//FUNÇÃO PARA EXECUTAR COMANDOS UNITÁRIOS
 void executaArgsUnitarios(char* comandosDeEntrada, char** parsed, char** arquivos, int direcionador_duplo)
 {
     pid_t pid = fork();
@@ -251,17 +273,44 @@ void executaArgsUnitarios(char* comandosDeEntrada, char** parsed, char** arquivo
     {
         printf("\nO processo de forking falhou..");
         return;
-    }else if (pid == 0){
-        if(arquivos[0] != NULL){
-            redirecionar_saida(parsed, arquivos[0], direcionador_duplo);
-        }else{
-            int ret = execvp(parsed[0], parsed);
-            if(ret < 0){
-                printf("\nEsse comando não pode ser executado..");
+    }
+    else if (pid == 0)
+    {
+        // Verifica se o comando é 'ls' ou 'cat'
+        if (strcmp(parsed[0], "ls") == 0 || strcmp(parsed[0], "cat") == 0)
+        {
+            // Se sim, executa 'ls' ou 'cat' com os argumentos fornecidos
+            char cwd[1024];
+            if (getcwd(cwd, sizeof(cwd)) != NULL) {
+                char command_path[2048];
+                sprintf(command_path, "%s/%s", current_dir, parsed[0]);
+                parsed[0] = command_path;
+                execvp(parsed[0], parsed);
+            } else {
+                perror("getcwd() error");
+                exit(EXIT_FAILURE);
+            }
+        }
+        else
+        {
+            // Se não, executa o comando normalmente
+            if (arquivos[0] != NULL)
+            {
+                redirecionar_saida(parsed, arquivos[0], direcionador_duplo);
+            }
+            else
+            {
+                int ret = execvp(parsed[0], parsed);
+                if (ret < 0)
+                {
+                    printf("\nEsse comando não pode ser executado..");
+                }
             }
         }
         exit(0);
-    }else{
+    }
+    else
+    {
         //AGUARDANDO O PROCESSO FINALIZAR
         wait(NULL);
         return;
@@ -295,12 +344,26 @@ void executaArgsEmPipe(char** parsed, char** parsedpipe, char** arquivo_esquerda
         dup2(pipefd[1], STDOUT_FILENO);
         close(pipefd[1]);
 
+        // Executa o comando da esquerda
         if (execvp(parsed[0], parsed) < 0){
             printf("\nCould not execute command 1..");
             exit(0);
         }
-    }else{
-        //PAI EM EXECUÇÃO
+    }
+    else
+    {
+        // PROCESSO PAI
+        if (parsedpipe[0] != NULL && strcmp(parsedpipe[0], "&") == 0)
+        {
+            //Se o próximo comando for separado por '&', não espera a conclusão do processo da esquerda
+            printf("Comando da esquerda em segundo plano\n");
+        }
+        else
+        {
+            //Espera o processo da esquerda terminar
+            wait(NULL);
+        }
+
         processo_direita = fork();
         if (processo_direita < 0){
             printf("\nO processo de forking falhou..");
@@ -315,20 +378,31 @@ void executaArgsEmPipe(char** parsed, char** parsedpipe, char** arquivo_esquerda
             dup2(pipefd[0], STDIN_FILENO);
             close(pipefd[0]);
 
-            if (execvp(parsed[0], parsed) < 0){
+            //Executa o comando da direita
+            if (execvp(parsedpipe[0], parsedpipe) < 0){
                 printf("\nCould not execute command 2..");
                 exit(0);
             }
-        }else{
-            //AGUARDA PROCESSO FINALIZAR
+        }
+        else
+        {
+            //Espera o processo da direita terminar
             wait(NULL);
         }
     }
-
 }
 
 int main()
 {
+    system("gcc -o ls ls.c");
+    system("gcc -o cat cat.c");
+    
+    // Limpa a tela
+    clear();
+
+    // Inicializa o diretório atual global
+    init_current_dir();
+    
     char *comandosDeEntrada, *argumentos[MAXLIST];
     char* argumentosPipe[MAXLIST];
     char* nomeArquivo[2];
@@ -339,6 +413,7 @@ int main()
 
     while(1)
     {
+        // Imprime o diretório atual
         printDir();
 
         nomeArquivo[0] = NULL;
@@ -358,15 +433,17 @@ int main()
         if (pipeOuUnitario == 3) executaArgsUnitarios(comandosDeEntradacopy, argumentos, nomeArquivo, 1);
 
         if (pipeOuUnitario == 4) executaArgsEmPipe(argumentos, argumentosPipe, nomeArquivo, arquivo_pipe, 1);
+
+        //LIBERA A MEMÓRIA ALOCADA
+        free(comandosDeEntradacopy);
+        free(comandosDeEntrada);
     }
 
-    //LIBERA A MEMÓRIA ALOCADA
-    free(comandosDeEntradacopy);
-    free(comandosDeEntrada);
-    
     //LIBERA A MEMÓRIA ALOCADA PARA OS ARRAYS APÓS O LOOP
     free(argumentos);
     free(argumentosPipe);
     free(nomeArquivo);
     free(arquivo_pipe);
+
+    return 0;
 }
