@@ -10,17 +10,17 @@ Funcionalidade básica:
     2) Programa externo.
 - Executar o comando em um novo processo filho.
 - Comandos:
-    1)Exit: finaliza o shell
-    2)cd<caminho>
-    3)path<caminho>
+      1)Exit
+      2)cd<caminho>
+      3)path<caminho>
 
 Comandos:
-Intala os recursos para utilizar Electron:
+Atual diretório:
 ```sh
-npm install electron
+path
 ```
 Instala o express mysql2 para utilizar no projeto:
 ```sh
-npm install express mysql2@latest concurrently
+
 ```
 ```sh
