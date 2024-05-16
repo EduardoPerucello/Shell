@@ -27,7 +27,7 @@ void list_files(int show_hidden, int long_format) {
                     continue;
                 }
                 // Imprime as permissões e o tamanho do arquivo
-                printf((S_ISDIR(file_stat.st_mode)) ? "d" : "-");
+                //printf((S_ISDIR(file_stat.st_mode)) ? "d" : "-");
                 printf((file_stat.st_mode & S_IRUSR) ? "r" : "-");
                 printf((file_stat.st_mode & S_IWUSR) ? "w" : "-");
                 printf((file_stat.st_mode & S_IXUSR) ? "x" : "-");

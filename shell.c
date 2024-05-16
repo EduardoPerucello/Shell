@@ -12,6 +12,12 @@
 #define MAXLIST 100
 #define clear() printf("\033[H\033[J")
 #define BUFSIZE 1024
+#define MAX_PATHS 100
+#define MAX_PATH_LENGTH 1024
+
+// Vetor global para armazenar caminhos
+char* paths[MAX_PATHS];
+int path_count = 0;
 
 // Atualiza o diretório atual global
 char current_dir[BUFSIZE];
@@ -90,55 +96,85 @@ void retirarEspaco(char* str, char** comandos)
     comandos[i] = NULL; // Adiciona NULL ao final da lista de comandos para indicar o término
 }
 
-// Função para processar comandos internos
-int builtinComandos(char** parsed)
-{
-    // Verifica se o comando é "cd"
-    if (strcmp(parsed[0], "cd") == 0)
-    {
-        // Verifica se nenhum diretório é fornecido ou se é fornecido o diretório home (~)
+void add_path(const char* path) {
+    if (access(path, F_OK) == -1) { // Verifica se o caminho existe
+        fprintf(stderr, "Caminho não existe: %s\n", path);
+        return;
+    }
+
+    if (path_count < MAX_PATHS) {
+        paths[path_count] = strdup(path); // Aloca memória e copia o caminho
+        path_count++;
+    } else {
+        fprintf(stderr, "Limite de caminhos atingido\n");
+    }
+}
+
+void remove_path(const char* path) {
+    for (int i = 0; i < path_count; i++) {
+        if (strcmp(paths[i], path) == 0) {
+            free(paths[i]); // Libera a memória alocada
+            for (int j = i; j < path_count - 1; j++) {
+                paths[j] = paths[j + 1];
+            }
+            path_count--;
+            return;
+        }
+    }
+    fprintf(stderr, "Caminho não encontrado: %s\n", path);
+}
+
+void list_paths() {
+    for (int i = 0; i < path_count; i++) {
+        printf("%s\n", paths[i]);
+    }
+}
+
+int builtinComandos(char** parsed) {
+    if (strcmp(parsed[0], "cd") == 0) {
         if (parsed[1] == NULL || strcmp(parsed[1], "~") == 0) {
-            // Obtém as informações do usuário atual
             struct passwd *pw = getpwuid(getuid());
-            // Verifica se as informações do usuário puderam ser obtidas
             if (pw == NULL) {
                 perror("getpwuid");
-                return 1; // Retorna 1 para indicar erro
+                return 1;
             }
-            // Muda o diretório atual para o diretório home do usuário
             if (chdir(pw->pw_dir) != 0) {
                 perror("chdir");
-                return 1; // Retorna 1 para indicar erro
+                return 1;
             }
-        }
-        // Verifica se o argumento é ".." para voltar um diretório
-        else if (strcmp(parsed[1], "..") == 0) {
-            // Muda o diretório atual para o diretório pai
+        } else if (strcmp(parsed[1], "..") == 0) {
             if (chdir("..") != 0) {
                 perror("chdir");
-                return 1; // Retorna 1 para indicar erro
+                return 1;
             }
-        }
-        // Se nenhum dos casos anteriores, muda para o diretório especificado
-        else {
-            // Muda o diretório atual para o diretório especificado
+        } else {
             if (chdir(parsed[1]) != 0) {
                 perror("chdir");
-                return 1; // Retorna 1 para indicar erro
+                return 1;
             }
         }
-        // Atualiza o diretório atual após o comando cd
-        // update_current_dir();
-        init_current_dir(); // Inicializa o diretório atual
-        return 1; // Retorna 1 para indicar que um comando interno foi executado
+        init_current_dir();
+        return 1;
+    } else if (strcmp(parsed[0], "exit") == 0) {
+        printf("\nGoodbye\n");
+        exit(EXIT_SUCCESS);
+    } else if (strcmp(parsed[0], "path") == 0) {
+        if (parsed[1] == NULL) {
+            list_paths();
+        } else if (strcmp(parsed[1], "add") == 0 && parsed[2] != NULL) {
+            for (int i = 2; parsed[i] != NULL; i++) {
+                add_path(parsed[i]);
+            }
+        } else if (strcmp(parsed[1], "remove") == 0 && parsed[2] != NULL) {
+            for (int i = 2; parsed[i] != NULL; i++) {
+                remove_path(parsed[i]);
+            }
+        } else {
+            fprintf(stderr, "Uso: path [add|remove] [caminho1 caminho2 ...]\n");
+        }
+        return 1;
     }
-    // Verifica se o comando é "exit"
-    else if (strcmp(parsed[0], "exit") == 0)
-    {
-        printf("\nGoodbye\n"); // Exibe uma mensagem de despedida
-        exit(EXIT_SUCCESS); // Sai do programa com sucesso
-    }
-    return 0; // Retorna 0 se o comando não é interno (built-in)
+    return 0;
 }
 
 //VERIFICA SE EXISTE DIRECIONADOR PARA ARQUIVO
@@ -453,8 +489,7 @@ void executaArgsEmPipe(char** parsed, char** parsedpipe, char** arquivo_esquerda
     }
 }
 
-int main()
-{
+int main(int argc, char* argv[]) {
     // Compila os programas 'ls' e 'cat'
     system("gcc -o ls ls.c");
     system("gcc -o cat cat.c");
@@ -465,24 +500,27 @@ int main()
     // Inicializa o diretório atual em uma cópia de 'path_catls'
     strcpy(path_catls, current_dir);
 
-    // Muda para o diretório pai e atualiza o diretório atual
-    chdir("..");
-    init_current_dir();
-
     // Limpa a tela
     clear();
 
     char *comandosDeEntrada, *argumentos[MAXLIST];
     char* argumentosPipe[MAXLIST];
     char* nomeArquivo[2];
-    char *comandosDeEntradacopy;
-    int pipeOuUnitario = 0;
-    int direcionadorDuplo;
     char* arquivo_pipe[2];
+    int pipeOuUnitario = 0;
+
+    FILE* batchFile = NULL;
+    if (argc > 1) {
+        // Se um arquivo batch é passado como argumento, abre o arquivo
+        batchFile = fopen(argv[1], "r");
+        if (batchFile == NULL) {
+            perror("Erro ao abrir o arquivo batch");
+            return 1;
+        }
+    }
 
     // Loop principal para a execução contínua do shell
-    while(1)
-    {
+    while (1) {
         // Imprime o diretório atual
         printDir();
 
@@ -490,36 +528,46 @@ int main()
         nomeArquivo[0] = NULL;
         arquivo_pipe[0] = NULL;
 
-        // Lê a linha de comando
-        comandosDeEntrada = read_line();
+        if (batchFile) {
+            // Lê a linha de comando do arquivo batch
+            size_t len = 0;
+            if (getline(&comandosDeEntrada, &len, batchFile) == -1) {
+                // Fim do arquivo, fecha o arquivo batch e sai do loop
+                fclose(batchFile);
+                break;
+            }
+        } else {
+            // Lê a linha de comando do stdin
+            comandosDeEntrada = read_line();
+        }
 
         // Processa a linha de comando e determina se é um comando único, um pipeline ou um redirecionamento
         pipeOuUnitario = processarString(comandosDeEntrada, argumentos, argumentosPipe, nomeArquivo, arquivo_pipe);
 
         // Executa o comando único se não houver pipeline ou redirecionamento
-        if (pipeOuUnitario == 1)  executaArgsUnitarios(comandosDeEntradacopy, argumentos, nomeArquivo, 0);
+        if (pipeOuUnitario == 1) {
+            executaArgsUnitarios(comandosDeEntrada, argumentos, nomeArquivo, 0);
+        }
 
         // Executa o pipeline se houver pipeline
-        if (pipeOuUnitario == 2) executaArgsEmPipe(argumentos, argumentosPipe, nomeArquivo, arquivo_pipe, 0);
+        if (pipeOuUnitario == 2) {
+            executaArgsEmPipe(argumentos, argumentosPipe, nomeArquivo, arquivo_pipe, 0);
+        }
 
         // Executa o comando único com redirecionamento de saída se houver redirecionamento
-        if (pipeOuUnitario == 3) executaArgsUnitarios(comandosDeEntradacopy, argumentos, nomeArquivo, 1);
+        if (pipeOuUnitario == 3) {
+            executaArgsUnitarios(comandosDeEntrada, argumentos, nomeArquivo, 1);
+        }
 
         // Executa o pipeline com redirecionamento de saída se houver redirecionamento
-        if (pipeOuUnitario == 4) executaArgsEmPipe(argumentos, argumentosPipe, nomeArquivo, arquivo_pipe, 1);
+        if (pipeOuUnitario == 4) {
+            executaArgsEmPipe(argumentos, argumentosPipe, nomeArquivo, arquivo_pipe, 1);
+        }
+
+        // Libera a memória alocada para a linha de comando após a execução
+        free(comandosDeEntrada);
     }
-
-    // Libera a memória alocada para a cópia da linha de comando e para a linha de comando original após o loop
-    free(comandosDeEntradacopy);
-    free(comandosDeEntrada);
-
-    // Libera a memória alocada para os arrays após o loop
-    free(argumentos);
-    free(argumentosPipe);
-    free(nomeArquivo);
-    free(arquivo_pipe);
 
     return 0; // Retorna 0 para indicar a conclusão bem-sucedida do programa
 }
-
 
