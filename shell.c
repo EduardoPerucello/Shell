@@ -13,18 +13,19 @@
 #define clear() printf("\033[H\033[J")
 #define BUFSIZE 1024
 
-//ATUALIZA O DIRETORIO ATUAL
+// Atualiza o diretório atual global
 char current_dir[BUFSIZE];
+char path_catls[BUFSIZE];
 
-//INICIALIZAÇÃO DO DIRETORI ATUAL
+// Inicialização do diretório atual global com /home/<usuário_logado>
 void init_current_dir() {
     if (getcwd(current_dir, sizeof(current_dir)) == NULL) {
-        perror("getcwd");
+        perror("Erro ao obter o diretório atual");
         exit(EXIT_FAILURE);
     }
 }
 
-//LEITURA DA LINHA ATÉ O ENTER
+// Função para ler a linha de comando
 char *read_line(void)
 {
     int bufsize = BUFSIZE;
@@ -42,7 +43,7 @@ char *read_line(void)
     {
         c = getchar();
 
-        //VERIFICA FIM DA LINHA
+        // Verifica o fim da linha
         if (c == EOF || c == '\n')
         {
             buffer[position] = '\0';
@@ -55,7 +56,7 @@ char *read_line(void)
 
         position++;
 
-        //REALOCA O BUFFER SE NECESSÁRIO
+        // Realoca o buffer se necessário
         if (position >= bufsize)
         {
             bufsize += BUFSIZE;
@@ -82,48 +83,43 @@ void retirarEspaco(char* str, char** comandos)
     comandos[i] = NULL; // Adiciona NULL para indicar o fim da lista de comandos
 }
 
-//COMANDO EXIT E CD
+// Função para processar comandos internos
 int builtinComandos(char** parsed)
 {
-    //Verifica se o comando é 'cd'
     if (strcmp(parsed[0], "cd") == 0)
     {
-        //Verifica se nenhum diretório é fornecido ou se o diretório é '~' (home)
         if (parsed[1] == NULL || strcmp(parsed[1], "~") == 0) {
-            //Obtém as informações do usuário atual
             struct passwd *pw = getpwuid(getuid());
             if (pw == NULL) {
                 perror("getpwuid");
-                return 1; //Retorna 1 em caso de erro
+                return 1;
             }
-            //Muda para o diretório home do usuário
             if (chdir(pw->pw_dir) != 0) {
                 perror("chdir");
-                return 1; //Retorna 1 em caso de erro
+                return 1;
             }
         } else if (strcmp(parsed[1], "..") == 0) {
-            //Se o diretório fornecido for '..', move para o diretório pai
             if (chdir("..") != 0) {
                 perror("chdir");
-                return 1; //Retorna 1 em caso de erro
+                return 1;
             }
         } else {
-            //Se um diretório específico for fornecido, move para esse diretório
             if (chdir(parsed[1]) != 0) {
                 perror("chdir");
-                return 1; //Retorna 1 em caso de erro
+                return 1;
             }
         }
-        init_current_dir(); //Atualiza o diretório atual após o comando cd
-        return 1; //Retorna 1 para indicar que um comando interno foi executado
+        // Atualiza o diretório atual após o comando cd
+        // update_current_dir();
+        init_current_dir();
+        return 1;
     }
-    //Verifica se o comando é 'exit'
     else if (strcmp(parsed[0], "exit") == 0)
     {
-        printf("\nGoodbye\n"); //Imprime uma mensagem de despedida
-        exit(EXIT_SUCCESS); //Termina o programa com sucesso
+        printf("\nGoodbye\n");
+        exit(EXIT_SUCCESS);
     }
-    return 0; //Retorna 0 se o comando não for interno
+    return 0;
 }
 
 //VERIFICA SE EXISTE DIRECIONADOR PARA ARQUIVO
@@ -210,7 +206,7 @@ int processarString(char* comandosDeEntrada, char** argumentos, char** argumento
 //MOSTRA O DIRETORIO RAIZ
 void printDir()
 {
-    printf("\n%s > ", current_dir);
+    printf("\n%s > ", current_dir); // Certifique-se de que current_dir está sendo usado corretamente aqui
 }
 
 //REDICIONAR A SAIDA
@@ -283,7 +279,7 @@ void executaArgsUnitarios(char* comandosDeEntrada, char** parsed, char** arquivo
             char cwd[1024];
             if (getcwd(cwd, sizeof(cwd)) != NULL) {
                 char command_path[2048];
-                sprintf(command_path, "%s/%s", current_dir, parsed[0]);
+                sprintf(command_path, "%s/%s", path_catls, parsed[0]);
                 parsed[0] = command_path;
                 execvp(parsed[0], parsed);
             } else {
@@ -317,7 +313,7 @@ void executaArgsUnitarios(char* comandosDeEntrada, char** parsed, char** arquivo
     }
 }
 
-//FUNÇÃO PARA LIDAR COM OS COMANDOS DENTRO DE UM PIPE
+// FUNÇÃO PARA LIDAR COM OS COMANDOS DENTRO DE UM PIPE
 void executaArgsEmPipe(char** parsed, char** parsedpipe, char** arquivo_esquerda, char** arquivo_direita, int direcionador_duplo)
 {
     int ret;
@@ -338,8 +334,8 @@ void executaArgsEmPipe(char** parsed, char** parsedpipe, char** arquivo_esquerda
 
     if (processo_esquerda == 0)
     {
-        //PROCESSO FILHO 1 EM EXECUÇÃO
-        //ESCRITA NO FINAL DO DESCRITOR
+        // PROCESSO FILHO 1 EM EXECUÇÃO
+        // ESCRITA NO FINAL DO DESCRITOR
         close(pipefd[0]);
         dup2(pipefd[1], STDOUT_FILENO);
         close(pipefd[1]);
@@ -355,12 +351,12 @@ void executaArgsEmPipe(char** parsed, char** parsedpipe, char** arquivo_esquerda
         // PROCESSO PAI
         if (parsedpipe[0] != NULL && strcmp(parsedpipe[0], "&") == 0)
         {
-            //Se o próximo comando for separado por '&', não espera a conclusão do processo da esquerda
+            // Se o próximo comando for separado por '&', não espera a conclusão do processo da esquerda
             printf("Comando da esquerda em segundo plano\n");
         }
         else
         {
-            //Espera o processo da esquerda terminar
+            // Espera o processo da esquerda terminar
             wait(NULL);
         }
 
@@ -370,15 +366,15 @@ void executaArgsEmPipe(char** parsed, char** parsedpipe, char** arquivo_esquerda
             return;
         }
 
-        //PROCESSO FILHO 2 EM EXECUÇÃO
-        //LEITURA DO FINAL DO LEITOR
+        // PROCESSO FILHO 2 EM EXECUÇÃO
+        // LEITURA DO FINAL DO LEITOR
         if (processo_direita == 0)
         {
             close(pipefd[1]);
             dup2(pipefd[0], STDIN_FILENO);
             close(pipefd[0]);
 
-            //Executa o comando da direita
+            // Executa o comando da direita
             if (execvp(parsedpipe[0], parsedpipe) < 0){
                 printf("\nCould not execute command 2..");
                 exit(0);
@@ -386,7 +382,7 @@ void executaArgsEmPipe(char** parsed, char** parsedpipe, char** arquivo_esquerda
         }
         else
         {
-            //Espera o processo da direita terminar
+            // Espera o processo da direita terminar
             wait(NULL);
         }
     }
@@ -396,13 +392,17 @@ int main()
 {
     system("gcc -o ls ls.c");
     system("gcc -o cat cat.c");
-    
+
+    init_current_dir();
+
+    strcpy(path_catls, current_dir);
+
+    chdir("..");
+    init_current_dir();
+
     // Limpa a tela
     clear();
 
-    // Inicializa o diretório atual global
-    init_current_dir();
-    
     char *comandosDeEntrada, *argumentos[MAXLIST];
     char* argumentosPipe[MAXLIST];
     char* nomeArquivo[2];
@@ -433,11 +433,11 @@ int main()
         if (pipeOuUnitario == 3) executaArgsUnitarios(comandosDeEntradacopy, argumentos, nomeArquivo, 1);
 
         if (pipeOuUnitario == 4) executaArgsEmPipe(argumentos, argumentosPipe, nomeArquivo, arquivo_pipe, 1);
-
-        //LIBERA A MEMÓRIA ALOCADA
-        free(comandosDeEntradacopy);
-        free(comandosDeEntrada);
     }
+
+    //LIBERA A MEMÓRIA ALOCADA
+    free(comandosDeEntradacopy);
+    free(comandosDeEntrada);
 
     //LIBERA A MEMÓRIA ALOCADA PARA OS ARRAYS APÓS O LOOP
     free(argumentos);
@@ -447,3 +447,5 @@ int main()
 
     return 0;
 }
+
+
