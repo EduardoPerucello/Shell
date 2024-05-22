@@ -273,7 +273,7 @@ void redirecionar_saida(char** parsed, char *nome_arquivo, int write_end) {
 
 
 char* encontrar_comando(const char* comando) {
-    static char caminho_completo[MAX_PATH_LENGTH]; // Array estático para armazenar o caminho completo do comando
+    static char caminho_completo[MAX_PATH_LENGTH]; 
     // Itera sobre todos os caminhos armazenados
     for (int i = 0; i < path_count; i++) {
         // Constrói o caminho completo do comando concatenando o caminho atual e o comando
@@ -285,13 +285,11 @@ char* encontrar_comando(const char* comando) {
     }
     return NULL; // Retorna NULL se o comando não for encontrado em nenhum dos caminhos
 }
-
-
 void executaArgsUnitarios(char** parsed, char* nome_arquivo) {
     pid_t pid = fork(); // Cria um processo filho
 
     if (pid == -1) { // Verifica se houve erro no fork
-        printf("\nFalha no fork"); // Exibe mensagem de erro
+        perror("Erro no fork"); // Exibe mensagem de erro
         return;
     } else if (pid == 0) { // Processo filho
         // Se o nome do arquivo de saída for especificado
@@ -307,23 +305,26 @@ void executaArgsUnitarios(char** parsed, char* nome_arquivo) {
             close(fd); // Fecha o descritor de arquivo
         }
         // Encontra o caminho completo do comando
-        char* comando = encontrar_comando(parsed[0]);
-        if (comando != NULL) {
+        char* caminho_completo = encontrar_comando(parsed[0]);
+        if (caminho_completo != NULL) {
             // Executa o comando com os argumentos fornecidos
-            execv(comando, parsed);
+            execv(caminho_completo, parsed);
+            // Se o execv retornar, algo deu errado
+            perror("Erro ao executar comando");
+            exit(EXIT_FAILURE);
         } else {
             // Exibe mensagem de erro se o comando não for encontrado
             fprintf(stderr, "Comando não encontrado: %s\n", parsed[0]);
             exit(EXIT_FAILURE); // Sai do processo filho em caso de falha
         }
     } else { // Processo pai
-        wait(NULL); // Espera pelo término do processo filho
+        int status;
+        // Espera pelo término do processo filho
+        waitpid(pid, &status, 0);
     }
 }
 
-
 int main(int argc, char *argv[]) {
-
     system("gcc -o ls ls.c"); // Compila o programa "ls"
     system("gcc -o cat cat.c"); // Compila o programa "cat"
     
@@ -333,40 +334,11 @@ int main(int argc, char *argv[]) {
     char *arquivos[MAXLIST]; // Array de strings para armazenar os nomes de arquivos
     char *arquivo_pipe[MAXLIST]; // Array de strings para armazenar os nomes de arquivos em um pipe
     int execFlag = 0; // Flag para indicar se o comando deve ser executado
+    
+    init_current_dir(); // Inicializa o diretório atual
 
-    if (argc > 1) { // Verifica se foram fornecidos argumentos de linha de comando
-        // Itera sobre os argumentos (ignorando o primeiro, que é o nome do programa)
-        for (int i = 1; i < argc; i++) {
-            // Abre o arquivo batch para leitura
-            FILE *batch_file = fopen(argv[i], "r");
-            if (batch_file == NULL) {
-                fprintf(stderr, "Erro ao abrir o arquivo %s\n", argv[i]); // Exibe mensagem de erro se falhar ao abrir o arquivo
-                continue; // Continua para o próximo arquivo, se houver
-            }
-
-            char linha_comando[MAXCOM]; // String para armazenar uma linha de comando do arquivo batch
-            // Processa cada linha do arquivo batch
-            while (fgets(linha_comando, MAXCOM, batch_file) != NULL) {
-                // Processa e executa a linha de comando
-                execFlag = processarString(linha_comando, argumentos, argumentosPipe, arquivos, arquivo_pipe);
-                if (execFlag == 1) {
-                    executaArgsUnitarios(argumentos, NULL); // Executa um comando unitário
-                } else if (execFlag == 2) {
-                    int write_end = 0;
-                    if(strcmp(argumentosPipe[0],">>") == 0){
-                        write_end = 1;
-                    }
-                    redirecionar_saida(argumentos, arquivos[0], write_end); // Redireciona a saída do comando
-                }
-                // Adicione outras condições para lidar com comandos encadeados ou redirecionamentos, se necessário
-            }
-
-            // Fecha o arquivo batch
-            fclose(batch_file);
-        }
-    } else {
-        // Se nenhum argumento de linha de comando for fornecido, execute normalmente
-        init_current_dir(); // Inicializa o diretório atual
+    // Se nenhum argumento de linha de comando for fornecido, execute normalmente
+    if (argc == 1) {
         clear(); // Limpa a tela do console
 
         while (1) {
@@ -386,8 +358,34 @@ int main(int argc, char *argv[]) {
             // Adicione outras condições para lidar com comandos encadeados ou redirecionamentos, se necessário
             free(linha_comando); // Libera a memória alocada para a linha de comando
         }
+    } else if (argc == 2) { // Se um argumento de linha de comando for fornecido
+        FILE *batchFile = fopen(argv[1], "r"); // Abre o arquivo batch para leitura
+        if (batchFile == NULL) { // Verifica se houve erro na abertura do arquivo
+            perror("Erro ao abrir o arquivo batch");
+            return 1;
+        }
+
+        while (fgets(entradaUsuario, MAXCOM, batchFile) != NULL) { // Lê cada linha do arquivo batch
+            entradaUsuario[strcspn(entradaUsuario, "\n")] = 0; // Remove o caractere de nova linha
+            execFlag = processarString(entradaUsuario, argumentos, argumentosPipe, arquivos, arquivo_pipe); // Processa a linha do arquivo batch
+            
+            if (execFlag == 1) {
+                executaArgsUnitarios(argumentos, NULL); // Executa um comando unitário
+            } else if (execFlag == 2) {
+                int write_end = 0;
+                if(strcmp(argumentosPipe[0],">>") == 0){
+                    write_end = 1;
+                }
+                redirecionar_saida(argumentos, arquivos[0], write_end); // Redireciona a saída do comando
+            }
+            // Adicione outras condições para lidar com comandos encadeados ou redirecionamentos, se necessário
+        }
+
+        fclose(batchFile); // Fecha o arquivo batch após a leitura
+    } else { // Se mais de um argumento de linha de comando for fornecido
+        printf("Uso: %s [arquivo_batch]\n", argv[0]); // Exibe mensagem de uso correto
+        return 1;
     }
 
     return 0;
 }
-

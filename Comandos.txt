@@ -1,0 +1,4 @@
+path add /home/edu/shell
+cd ola
+ls
+cat test.txt
