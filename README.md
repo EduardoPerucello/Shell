@@ -33,6 +33,10 @@ b) Execute um arquivo em uma lista de comandos
 ```sh
 ./shell <nome_do_arquivo>
 ```
+Para executar os comandos da pasta Comandos.txt basta modificar o path add
+```sh
+path add <caminho1> <caminho2> ...
+```
 ## Comandos
 Ao executar o programa você deve colocar os caminhos necessarios para que o Shell execute os comandos corretamente.
 <br>
