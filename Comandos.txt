@@ -1,6 +1,6 @@
 path add /home/edu/shell
 cat
 echo Hello World
-cd oal
+cd ola
 ls
 cat test.txt
