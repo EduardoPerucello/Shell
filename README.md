@@ -54,6 +54,14 @@ b) Para remover algum caminho do path
 ```Sh
 path remove <caminho1> <caminho2> ...
 ```
+c) Para ver os caminhos que estão no path
+```sh
+path
+```
+### Limpar a tela
+```sh
+clear
+```
 ### Entrar em um diretório
 ```sh
 cd <nome_do_diretório>
