@@ -1,5 +1,22 @@
-# Shell-em-C
+# Shell em C
 Projeto que tem como objetivo fazer um interpretador de comandos.
+<br>
+O programa executa os seguintes comandos:
+<br>
+-path
+<br>
+-cd
+<br>
+-clear
+<br>
+-ls
+<br>
+-cat
+<br>
+-echo
+<br>
+-exit
+
 ## Como executar
 1. ### Compilação
 Compile o programa usando o compilador C compatível, como o GCC
@@ -61,6 +78,12 @@ ls -al
 ```sh
 ls -la
 ```
+```sh
+ls -a -l
+```
+```sh
+ls -l -a
+```
 ### Manipulação de conteúdo de arquivos
 a) Impressão na tela
 ```sh
@@ -70,6 +93,10 @@ b) Copiar o conteúdo de um arquivo em outro
 ```sh
 cat <nome_do_arquivo_original> > <nome_do_arquivo_destino>
 ```
+### Imprimir mensagem na tela
+```sh
+echo <mensagem>
+````
 ### Fechar o Shell
 ```sh
 exit
