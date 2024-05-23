@@ -260,7 +260,7 @@ void printDir() {
     }
 
     // Imprime o usuário, host e diretório atual com as cores especificadas
-    printf("\n" ANSI_COLOR_YELLOW "%s@%s" ANSI_COLOR_BLUE "★%s > " ANSI_COLOR_RESET, username, hostname, current_dir);
+    printf("\n" ANSI_COLOR_YELLOW "%s@%s:" ANSI_COLOR_BLUE "★%s > " ANSI_COLOR_RESET, username, hostname, current_dir);
 }
 
 void redirecionar_saida(char** parsed, char *nome_arquivo, int write_end) {
