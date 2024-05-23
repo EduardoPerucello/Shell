@@ -1,10 +1,14 @@
 #include <stdio.h>
 #include <stdlib.h> // Para a função exit()
+// Definindo cores ANSI
+#define ANSI_COLOR_GREEN   "\x1b[32m"
+#define ANSI_COLOR_RESET   "\x1b[0m"
+#define ANSI_COLOR_RED     "\x1b[31m"
 
 int main(int argc, char *argv[]) {
     // Verifica se foi fornecido um arquivo como argumento
     if (argc != 2 && argc != 4) {
-        printf("Uso: %s <arquivo_origem> ou %s <arquivo_origem> > <arquivo_destino>\n", argv[0], argv[0]);
+        printf( ANSI_COLOR_GREEN "Uso: %s <arquivo_origem> ou %s <arquivo_origem> > <arquivo_destino>\n" ANSI_COLOR_RESET, argv[0], argv[0]);
         return 1;
     }
 

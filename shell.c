@@ -1,6 +1,7 @@
 #include <stdio.h>
-#include <string.h>
 #include <stdlib.h>
+#include <ctype.h>
+#include <string.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -13,16 +14,29 @@
 #define BUFSIZE 1024
 #define MAX_PATHS 100
 #define MAX_PATH_LENGTH 1024
+#define HOST_NAME_MAX 255
+
+// Adicionando cores ANSI
+#define ANSI_COLOR_RED      "\x1b[31m"
+#define ANSI_COLOR_BLUE     "\x1b[34m"
+#define ANSI_COLOR_GREEN    "\x1b[32m"
+#define ANSI_COLOR_YELLOW "\x1b[33m"
+#define ANSI_COLOR_RESET    "\x1b[0m"
+
+// Definindo os códigos de cores
+#define ANSI_COLOR_RED_BRIGHT "\x1b[91m"
+#define ANSI_COLOR_YELLOW_BRIGHT "\x1b[93m"
 
 char* paths[MAX_PATHS];
 int path_count = 0;
 char current_dir[BUFSIZE];
-char path_catls[BUFSIZE];
+char hostname[HOST_NAME_MAX];
+char *username;
 
 void init_current_dir() {
-    if (getcwd(current_dir, sizeof(current_dir)) == NULL) { // Verifica se o diretório atual pode ser obtido com sucesso
-        perror("Erro ao obter o diretório atual"); // Em caso de falha, exibe uma mensagem de erro com detalhes do erro
-        exit(EXIT_FAILURE); // Encerra o programa com código de erro
+    if (getcwd(current_dir, sizeof(current_dir)) == NULL) { 
+        fprintf(stderr, ANSI_COLOR_RED "Erro ao obter o diretório atual\n" ANSI_COLOR_RESET); 
+        exit(EXIT_FAILURE);
     }
 }
 
@@ -33,7 +47,7 @@ char *read_line(void) {
     int c; // Variável para armazenar cada caractere lido
 
     if (!buffer) { // Verifica se a alocação de memória foi bem-sucedida
-        fprintf(stderr, "Erro de alocação de memória\n"); // Em caso de falha, exibe uma mensagem de erro e encerra o programa
+        fprintf(stderr, ANSI_COLOR_RED "Erro de alocação de memória\n" ANSI_COLOR_RESET); // Em caso de falha, exibe uma mensagem de erro e encerra o programa
         exit(EXIT_FAILURE);
     }
 
@@ -51,7 +65,7 @@ char *read_line(void) {
             bufsize += BUFSIZE; // Aumenta o tamanho do buffer
             buffer = realloc(buffer, bufsize); // Realoca memória para o buffer com o novo tamanho
             if (!buffer) { // Verifica se a realocação de memória foi bem-sucedida
-                fprintf(stderr, "Erro de alocação de memória\n"); // Em caso de falha, exibe uma mensagem de erro e encerra o programa
+                fprintf(stderr, ANSI_COLOR_RED "Erro de alocação de memória\n" ANSI_COLOR_RESET); // Em caso de falha, exibe uma mensagem de erro e encerra o programa
                 exit(EXIT_FAILURE);
             }
         }
@@ -72,7 +86,7 @@ void retirarEspaco(char* str, char** comandos) {
 
 void add_path(const char* path) {
     if (access(path, F_OK) == -1) { // Verifica se o caminho não existe
-        fprintf(stderr, "Caminho não existe: %s\n", path); // Exibe uma mensagem de erro se o caminho não existe
+        fprintf(stderr, ANSI_COLOR_RED "Caminho não existe: %s\n" ANSI_COLOR_RESET, path); // Exibe uma mensagem de erro se o caminho não existe
         return; // Retorna sem adicionar o caminho
     }
 
@@ -80,7 +94,7 @@ void add_path(const char* path) {
         paths[path_count] = strdup(path); // Adiciona o caminho ao array de caminhos
         path_count++; // Incrementa o contador de caminhos
     } else {
-        fprintf(stderr, "Limite de caminhos atingido\n"); // Exibe uma mensagem de erro se o limite de caminhos foi atingido
+        fprintf(stderr, ANSI_COLOR_RED "Limite de caminhos atingido\n" ANSI_COLOR_RESET); // Exibe uma mensagem de erro se o limite de caminhos foi atingido
     }
 }
 
@@ -96,7 +110,7 @@ void remove_path(const char* path) {
             return; // Retorna após remover o caminho
         }
     }
-    fprintf(stderr, "Caminho não encontrado: %s\n", path); // Se o caminho não foi encontrado, exibe uma mensagem de erro
+    fprintf(stderr, ANSI_COLOR_GREEN "Caminho não encontrado: %s\n" ANSI_COLOR_RESET, path); // Se o caminho não foi encontrado, exibe uma mensagem de erro
 }
 
 
@@ -105,6 +119,14 @@ void list_paths() {
         printf("%s\n", paths[i]);
     }
 }
+
+void executaEcho(char** parsed) {
+    for (int i = 1; parsed[i] != NULL; i++) { // Começa do índice 1 para pular o comando 'echo'
+        printf("%s ", parsed[i]); // Imprime cada argumento seguido de um espaço
+    }
+    printf("\n"); // Adiciona uma nova linha ao final da saída
+}
+
 
 int builtinComandos(char** parsed) {
     if (strcmp(parsed[0], "cd") == 0) { // Verifica se o comando é "cd"
@@ -148,9 +170,12 @@ int builtinComandos(char** parsed) {
                 remove_path(parsed[i]);
             }
         } else {
-            fprintf(stderr, "Uso: path [add|remove] [caminho1 caminho2 ...]\n"); // Exibe mensagem de uso correto do comando "path"
+            fprintf(stderr, ANSI_COLOR_GREEN "Uso: path [add|remove] [caminho1 caminho2 ...]\n" ANSI_COLOR_RESET); // Exibe mensagem de uso correto do comando "path"
         }
         return 1;
+    } else if (strcmp(parsed[0], "echo") == 0) {
+        executaEcho(parsed); // Chama a função executaEcho para o comando 'echo'
+        return 1; // Indica que foi um comando embutido
     }
     return 0;
 }
@@ -215,9 +240,27 @@ int processarString(char* comandosDeEntrada, char** argumentos, char** argumento
         return 1 + piped + direcionador_duplo;
 }
 
-
 void printDir() {
-    printf("\n%s > ", current_dir);
+    // Obtém o nome do host
+    if (gethostname(hostname, sizeof(hostname)) == -1) {
+        perror("Erro ao obter o nome do host");
+        return;
+    }
+
+    // Obtém o nome do usuário logado
+    username = getenv("USER");
+    if (username == NULL) {
+        struct passwd *pw = getpwuid(getuid());
+        if (pw != NULL) {
+            username = pw->pw_name;
+        } else {
+            perror("Erro ao obter o nome do usuário");
+            return;
+        }
+    }
+
+    // Imprime o usuário, host e diretório atual com as cores especificadas
+    printf("\n" ANSI_COLOR_YELLOW "%s@%s" ANSI_COLOR_BLUE "★%s > " ANSI_COLOR_RESET, username, hostname, current_dir);
 }
 
 void redirecionar_saida(char** parsed, char *nome_arquivo, int write_end) {
@@ -266,7 +309,7 @@ void redirecionar_saida(char** parsed, char *nome_arquivo, int write_end) {
         if (WIFEXITED(rtrnstatus)){
             return; // Retorna se o processo filho terminou normalmente
         } else {
-            printf("Child did not terminate with exit\n"); // Exibe mensagem se o processo filho não terminou normalmente
+            printf( ANSI_COLOR_RED "Child did not terminate with exit\n" ANSI_COLOR_RESET); // Exibe mensagem se o processo filho não terminou normalmente
         }
     }
 }
@@ -314,7 +357,7 @@ void executaArgsUnitarios(char** parsed, char* nome_arquivo) {
             exit(EXIT_FAILURE);
         } else {
             // Exibe mensagem de erro se o comando não for encontrado
-            fprintf(stderr, "Comando não encontrado: %s\n", parsed[0]);
+            fprintf(stderr, ANSI_COLOR_RED "Comando não encontrado: %s\n" ANSI_COLOR_RESET, parsed[0]);
             exit(EXIT_FAILURE); // Sai do processo filho em caso de falha
         }
     } else { // Processo pai
@@ -325,8 +368,6 @@ void executaArgsUnitarios(char** parsed, char* nome_arquivo) {
 }
 
 int main(int argc, char *argv[]) {
-    system("gcc -o ls ls.c"); // Compila o programa "ls"
-    system("gcc -o cat cat.c"); // Compila o programa "cat"
     
     char entradaUsuario[MAXCOM]; // String para armazenar a entrada do usuário
     char *argumentos[MAXLIST]; // Array de strings para armazenar os argumentos de um comando
@@ -383,7 +424,7 @@ int main(int argc, char *argv[]) {
 
         fclose(batchFile); // Fecha o arquivo batch após a leitura
     } else { // Se mais de um argumento de linha de comando for fornecido
-        printf("Uso: %s [arquivo_batch]\n", argv[0]); // Exibe mensagem de uso correto
+        printf( ANSI_COLOR_GREEN "Uso: %s [arquivo_batch]\n" ANSI_COLOR_RESET, argv[0]); // Exibe mensagem de uso correto
         return 1;
     }
 

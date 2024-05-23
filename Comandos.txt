@@ -1,4 +1,6 @@
 path add /home/edu/shell
-cd ola
+cat
+echo Hello World
+cd oal
 ls
 cat test.txt
