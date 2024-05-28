@@ -1,5 +1,4 @@
 path add /home/edu/shell
-cat
 echo Hello World
 cd ola
 ls
